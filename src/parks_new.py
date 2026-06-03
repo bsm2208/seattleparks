@@ -237,7 +237,9 @@ const parks = {parks_json};
 
 const markers = [];
 let activeRating = 'all';
-let boundaryLayer = null;
+let hoverLayer = null;    // boundary shown on hover, removed on mouseout
+let pinnedLayer = null;   // boundary pinned on click until click elsewhere
+let pinnedMarker = null;  // which marker is currently pinned
 
 function rColor(r){{
   if(r>=4.5) return {{color:'#4A7C59',bg:'#EBF2EC',text:'#2D5C3A',mid:'#C8DEC9'}};
@@ -283,26 +285,51 @@ parks.forEach(p => {{
   const m = L.marker([p.lat,p.lon],{{icon}}).bindPopup(pop);
   m._d = p;
 
-  // Boundary hover
+  function makeBoundary(){{
+    if(!p.boundary) return null;
+    const c2 = rColor(p.rating);
+    return L.polygon(p.boundary, {{
+      color: c2.color, fillColor: c2.color,
+      fillOpacity: 0.15, weight: 1.5, opacity: 0.6
+    }}).addTo(map);
+  }}
+
+  // hover: boundary only
   m.on('mouseover', function(){{
-    if(boundaryLayer) {{ map.removeLayer(boundaryLayer); boundaryLayer=null; }}
-    if(p.boundary){{
-      const c2 = rColor(p.rating);
-      boundaryLayer = L.polygon(p.boundary, {{
-        color: c2.color,
-        fillColor: c2.color,
-        fillOpacity: 0.15,
-        weight: 1.5,
-        opacity: 0.6
-      }}).addTo(map);
-    }}
+    if(pinnedMarker === m) return; // already pinned, don't interfere
+    if(hoverLayer) {{ map.removeLayer(hoverLayer); hoverLayer=null; }}
+    hoverLayer = makeBoundary();
   }});
   m.on('mouseout', function(){{
-    if(boundaryLayer) {{ map.removeLayer(boundaryLayer); boundaryLayer=null; }}
+    if(pinnedMarker === m) return;
+    if(hoverLayer) {{ map.removeLayer(hoverLayer); hoverLayer=null; }}
+  }});
+
+  // click: pin boundary + open popup
+  m.on('click', function(e){{
+    L.DomEvent.stopPropagation(e);
+    // clear previous pin
+    if(pinnedMarker && pinnedMarker !== m) {{
+      pinnedMarker.closePopup();
+      if(pinnedLayer) {{ map.removeLayer(pinnedLayer); pinnedLayer=null; }}
+    }}
+    // clear hover boundary
+    if(hoverLayer) {{ map.removeLayer(hoverLayer); hoverLayer=null; }}
+    pinnedMarker = m;
+    if(pinnedLayer) {{ map.removeLayer(pinnedLayer); pinnedLayer=null; }}
+    pinnedLayer = makeBoundary();
+    m.openPopup();
   }});
 
   m.addTo(map);
   markers.push(m);
+}});
+
+// Click map background to unpin
+map.on('click', function(){{
+  if(pinnedMarker) {{ pinnedMarker.closePopup(); pinnedMarker=null; }}
+  if(pinnedLayer)  {{ map.removeLayer(pinnedLayer); pinnedLayer=null; }}
+  if(hoverLayer)   {{ map.removeLayer(hoverLayer);  hoverLayer=null;  }}
 }});
 
 // Neighborhood dropdown
